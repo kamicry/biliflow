@@ -1,5 +1,5 @@
 //// pages/index.tsx
-import React from 'react';
+/*import React from 'react';
 import MusicPlayer from '../components/MusicPlayer';
 
 export default function Home() {
@@ -9,3 +9,4 @@ export default function Home() {
     </div>
   );
 }
+*/
