@@ -138,10 +138,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     });
   }
 
-  try {
+ /* try {
     const { page = '1', pageSize = '10' } = req.query;
     const mediaId = '3399027968';
+*/
+    // 在 parse-favorites.ts 中修改 handler 函数
+
+  // ... 其他代码保持不变
+
+  try {
+    const { page = '1', pageSize = '10', mediaId = '3399027968' } = req.query;
     
+    // 使用传入的 mediaId 或默认值
+    const finalMediaId = mediaId as string;
+    
+   
+    
+//  
     const pageNum = parseInt(page as string);
     const pageSizeNum = parseInt(pageSize as string);
     
