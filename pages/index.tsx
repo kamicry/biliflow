@@ -28,6 +28,8 @@ export default function VideoPlayer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [jumpPage, setJumpPage] = useState('');
+  const [customMediaId, setCustomMediaId] = useState('');
+  const [currentMediaId, setCurrentMediaId] = useState('3399027968'); // 默认收藏夹ID
   const [pagination, setPagination] = useState<{
     currentPage: number;
     pageSize: number;
@@ -44,14 +46,22 @@ export default function VideoPlayer() {
   // 视频元素引用
   const videoRef = useRef<HTMLVideoElement>(null);
   const jumpInputRef = useRef<HTMLInputElement>(null);
+  const mediaIdInputRef = useRef<HTMLInputElement>(null);
+
+  // 从URL中提取mediaId的函数
+  const extractMediaIdFromUrl = (url: string): string | null => {
+    // 支持格式: https://www.bilibili.com/list/ml3399027968
+    const match = url.match(/list\/ml(\d+)/);
+    return match ? match[1] : null;
+  };
 
   // 获取播放列表
-  const fetchPlaylist = async (page: number = pagination.currentPage, pageSize: number = pagination.pageSize) => {
+  const fetchPlaylist = async (page: number = pagination.currentPage, pageSize: number = pagination.pageSize, mediaId: string = currentMediaId) => {
     setLoading(true);
     setError('');
     
     try {
-      const response = await fetch(`/api/parse-favorites?page=${page}&pageSize=${pageSize}`);
+      const response = await fetch(`/api/parse-favorites?page=${page}&pageSize=${pageSize}&mediaId=${mediaId}`);
       const data: ApiResponse = await response.json();
       
       if (data.success) {
@@ -74,7 +84,7 @@ export default function VideoPlayer() {
 
   // 初始化加载
   useEffect(() => {
-    fetchPlaylist(1, 10);
+    fetchPlaylist(1, 10, currentMediaId);
   }, []);
 
   // 处理视频结束事件，实现自动连播
@@ -103,19 +113,19 @@ export default function VideoPlayer() {
   // 分页控制 - 移除禁用逻辑
   const handlePageChange = (newPage: number) => {
     if (newPage < 1) return;
-    fetchPlaylist(newPage, pagination.pageSize);
+    fetchPlaylist(newPage, pagination.pageSize, currentMediaId);
   };
 
   const handlePageSizeChange = (newSize: number) => {
     if (newSize < 1 || newSize > 20) return;
-    fetchPlaylist(1, newSize);
+    fetchPlaylist(1, newSize, currentMediaId);
   };
 
   // 跳转到指定页面
   const handleJumpToPage = () => {
     const pageNum = parseInt(jumpPage);
     if (pageNum && pageNum > 0 && pageNum <= (pagination.totalPages || 1)) {
-      handlePageChange(pageNum);
+      fetchPlaylist(pageNum, pagination.pageSize, currentMediaId);
       setJumpPage('');
     }
   };
@@ -125,6 +135,44 @@ export default function VideoPlayer() {
     if (e.key === 'Enter') {
       handleJumpToPage();
     }
+  };
+
+  // 处理自定义收藏夹
+  const handleCustomMediaIdSubmit = () => {
+    let mediaId = customMediaId.trim();
+    
+    if (!mediaId) {
+      setError('请输入收藏夹链接或ID');
+      return;
+    }
+
+    // 如果输入的是URL，尝试提取mediaId
+    if (mediaId.includes('bilibili.com')) {
+      const extractedId = extractMediaIdFromUrl(mediaId);
+      if (extractedId) {
+        mediaId = extractedId;
+      } else {
+        setError('无法从URL中解析出收藏夹ID，请确保是类似 https://www.bilibili.com/list/ml3399027968 的格式');
+        return;
+      }
+    }
+
+    // 验证mediaId是否为纯数字
+    if (!/^\d+$/.test(mediaId)) {
+      setError('收藏夹ID必须是纯数字');
+      return;
+    }
+
+    setCurrentMediaId(mediaId);
+    setCustomMediaId('');
+    fetchPlaylist(1, pagination.pageSize, mediaId);
+  };
+
+  // 重置为默认收藏夹
+  const handleResetToDefault = () => {
+    setCurrentMediaId('3399027968');
+    setCustomMediaId('');
+    fetchPlaylist(1, pagination.pageSize, '3399027968');
   };
 
   // 播放指定视频
@@ -245,7 +293,126 @@ export default function VideoPlayer() {
             B站视频播放器
           </h1>
 
-          {/* 分页控制 - 移除禁用状态，添加跳转功能 */}
+          {/* 自定义收藏夹输入区域 */}
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '12px',
+            marginBottom: '20px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          }}>
+            <h3 style={{ 
+              marginTop: 0, 
+              marginBottom: '15px',
+              color: '#333',
+              fontSize: '1.1rem'
+            }}>
+              自定义收藏夹
+            </h3>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '10px',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ flex: 1, minWidth: '300px' }}>
+                <input
+                  ref={mediaIdInputRef}
+                  type="text"
+                  value={customMediaId}
+                  onChange={(e) => setCustomMediaId(e.target.value)}
+                  placeholder="输入收藏夹链接或ID (例如: https://www.bilibili.com/list/ml3399027968 或 3399027968)"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleCustomMediaIdSubmit();
+                    }
+                  }}
+                />
+              </div>
+              <button
+                onClick={handleCustomMediaIdSubmit}
+                disabled={loading}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  transition: 'all 0.2s ease',
+                  opacity: loading ? 0.7 : 1
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.backgroundColor = '#218838';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.backgroundColor = '#28a745';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }
+                }}
+              >
+                {loading ? '加载中...' : '加载收藏夹'}
+              </button>
+              <button
+                onClick={handleResetToDefault}
+                disabled={loading}
+                style={{
+                  padding: '10px 15px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  transition: 'all 0.2s ease',
+                  opacity: loading ? 0.7 : 1
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.backgroundColor = '#5a6268';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.backgroundColor = '#6c757d';
+                  }
+                }}
+              >
+                重置默认
+              </button>
+            </div>
+            <div style={{ 
+              marginTop: '10px', 
+              fontSize: '13px', 
+              color: '#666',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span>
+                当前收藏夹: <strong>{currentMediaId}</strong>
+                {currentMediaId === '3399027968' && ' (默认)'}
+              </span>
+              <span>
+                示例: ml3399027968 或 https://www.bilibili.com/list/ml3399027968
+              </span>
+            </div>
+          </div>
+
+          {/* 分页控制 */}
           <div style={{
             backgroundColor: 'white',
             padding: '20px',
@@ -421,7 +588,7 @@ export default function VideoPlayer() {
             <div style={{
               padding: '10px',
               backgroundColor: '#e6f7ff',
-              border: '1px solid #b3e0ff',
+              border: '1px solid '#b3e0ff',
               borderRadius: '6px',
               marginBottom: '20px',
               textAlign: 'center',
@@ -818,6 +985,7 @@ export default function VideoPlayer() {
           }}>
             <h3 style={{ marginTop: 0, color: '#0077b3', fontSize: '16px' }}>功能说明:</h3>
             <ul style={{ paddingLeft: '20px', marginBottom: 0, lineHeight: '1.6' }}>
+              <li>支持自定义收藏夹：输入收藏夹链接或ID即可加载</li>
               <li>使用分页控件调整显示的播放列表</li>
               <li>点击左侧列表中的视频标题开始播放</li>
               <li>当前播放的视频会高亮显示</li>
